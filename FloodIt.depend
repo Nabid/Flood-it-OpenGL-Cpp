@@ -1,0 +1,10 @@
+# depslib dependency file v1.0
+1424208098 source:/home/prome/Documents/cpp/computer_graphics/FloodIt/main.cpp
+	<GL/glut.h>
+	<cstdio>
+	<iostream>
+	<cmath>
+	<queue>
+	<cstring>
+	<string>
+
