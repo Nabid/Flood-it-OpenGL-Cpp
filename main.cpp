@@ -18,12 +18,26 @@ using namespace std;
 #define RUNNING true
 #define STOPPED false
 
+// window width, height
 int width = 640;
 int height = 480;
+// total cells in a row or a columns, grid size = sz*sz
 const int sz = 12;
-const int cell_sz = 15;
+// single cell size in pixels
+const int cell_sz = 25;
 int grid[sz+3][sz+3];
 int cnt, moves, mx_moves = 25;
+// approx centers
+int sa = width/2-((sz/2*cell_sz)+(sz/2));
+int sb = height/2+((sz/2*cell_sz)+(sz/2));
+// buttons
+const int tot_buttons = 8;
+int buttonX[tot_buttons];
+int buttonY[tot_buttons];
+// random color to achieve as final goal
+int rand_col;
+// save current color command
+int curr_col;
 
 // color structure
 struct Color {
@@ -85,11 +99,13 @@ void gameReset() {
 	initGrid();
 	cnt = 0;
 	moves = 0;
+	rand_col = rand() % 6;
+	curr_col = -1;
 }
 /* draw grid */
 void drawBoard() {
 	int i, j;
-	int w = 0, h = height;
+	int w = sa, h = sb;
 
 	for( i=0; i<sz; i++ ) {
 		for( j=0; j<sz; j++ ) {
@@ -107,10 +123,60 @@ void drawBoard() {
 			w += cell_sz + 1;
 		}
 		// set width to 0 to draw from starting position
-		w = 0;
+		w = sa;
 		// decrease height to make new row
 		h -= cell_sz + 1;
 	}
+
+	// final color cell
+	w = sa-100, h = sb;
+	glColor3f( col[rand_col].r, col[rand_col].g, col[rand_col].b );
+	glBegin(GL_POLYGON);
+		glVertex2i(w, h-cell_sz);
+		glVertex2i(w+cell_sz, h-cell_sz);
+		glVertex2i(w+cell_sz, h);
+		glVertex2i(w, h);
+	glEnd();
+
+	// TEXTURE
+	string s[] = {"TARGET", "WIN", "LOOSE"};
+	//glMatrixMode(GL_PROJECTION);
+	glLoadIdentity();
+	gluOrtho2D(0.0, width, 0.0, height);
+	glMatrixMode(GL_MODELVIEW);
+	glPushMatrix();
+	glLoadIdentity();
+
+	void * font1 = GLUT_BITMAP_HELVETICA_10;
+	void * font2 = GLUT_BITMAP_HELVETICA_18;
+
+	glColor3f(WHITE.r, WHITE.g, WHITE.b); //needs to be called before RasterPos
+	glRasterPos2i(w-5, h+5);
+	for(string::iterator i = s[0].begin(); i != s[0].end(); ++i) {
+		char cc = *i;
+		glutBitmapCharacter(font1, cc);
+	}
+
+	if( moves >= mx_moves || cnt >= sz*sz ) {
+		if( rand_col == curr_col ) {
+			glColor3f(GREEN.r, GREEN.g, GREEN.b); //needs to be called before RasterPos
+			glRasterPos2i(w-5, h-100);
+			for(string::iterator i = s[1].begin(); i != s[1].end(); ++i) {
+				char cc = *i;
+				glutBitmapCharacter(font2, cc);
+			}
+		} else if( rand_col != curr_col && curr_col != -1 ) {
+			glColor3f(RED.r, RED.g, RED.b); //needs to be called before RasterPos
+			glRasterPos2i(w-5, h-100);
+			for(string::iterator i = s[2].begin(); i != s[2].end(); ++i) {
+				char cc = *i;
+				glutBitmapCharacter(font2, cc);
+			}
+		}
+	}
+
+	glEnable(GL_TEXTURE_2D);
+	glutSwapBuffers();
 }
 
 /* converts int values to string */
@@ -166,15 +232,16 @@ void gameInfo() {
 
     // message line 1
 	glColor3f(WHITE.r, WHITE.g, WHITE.b); //needs to be called before RasterPos
-	glRasterPos2i(0, height-(sz*cell_sz+5*sz));
+	glRasterPos2i(sa-20, sb+10);
     for(string::iterator i = s1.begin(); i != s1.end(); ++i) {
         char c = *i;
         glutBitmapCharacter(font1, c);
     }
 
+	int ln = 120;
     // message line 2
     glColor3f(WHITE.r, WHITE.g, WHITE.b); //needs to be called before RasterPos
-    glRasterPos2i(0, height-(sz*cell_sz+7*sz));
+    glRasterPos2i(sa-ln, sb+50);
     for(string::iterator i = s2start.begin(); i != s2start.end(); ++i) {
         char c = *i;
         glutBitmapCharacter(font2, c);
@@ -182,7 +249,7 @@ void gameInfo() {
 
 	for( int k=0; k<6; k++ ) {
 		glColor3f(col[k].r, col[k].g, col[k].b); //needs to be called before RasterPos
-		glRasterPos2i(50+35*(k+1), height-(sz*cell_sz+7*sz));
+		glRasterPos2i(sa-ln+50+35*(k+1), sb+50);
 		for(string::iterator i = s2c[k].begin(); i != s2c[k].end(); ++i) {
 			char c = *i;
 			glutBitmapCharacter(font2, c);
@@ -190,7 +257,7 @@ void gameInfo() {
 	}
 
 	glColor3f(WHITE.r, WHITE.g, WHITE.b); //needs to be called before RasterPos
-    glRasterPos2i(20+50+35*6, height-(sz*cell_sz+7*sz));
+    glRasterPos2i(sa-ln+20+50+35*6, sb+50);
     for(string::iterator i = s2end.begin(); i != s2end.end(); ++i) {
         char c = *i;
         glutBitmapCharacter(font2, c);
@@ -201,6 +268,80 @@ void gameInfo() {
     // end text -------------------------------------------------
 }
 
+/**
+ * draw buttons
+ */
+void drawButtons() {
+	int sx = width-100, sy = height-100;
+	int w = sx, h = sy;
+	int i, j;
+	int c = 0;
+
+	for( i=0; i<6; i++ ) {
+		for( j=0; j<1; j++ ) {
+			//printf( "grid[ %d ][ %d ] = %d\n", i, j, c );
+			// draw polygon with cell color
+			glColor3f( col[c].r, col[c].g, col[c].b );
+			glBegin(GL_POLYGON);
+				glVertex2i(w, h-cell_sz);
+				glVertex2i(w+2*cell_sz, h-cell_sz);
+				glVertex2i(w+2*cell_sz, h);
+				glVertex2i(w, h);
+			glEnd();
+			// save middle point
+			buttonX[c] = w;
+			buttonY[c] = h;
+			c++;
+			// increase width to draw next cell
+			w += cell_sz + 1;
+		}
+		// set width to 0 to draw from starting position
+		w = sx;
+		// decrease height to make new row
+		h -= cell_sz + 1;
+	}
+
+	// quit button and reset button
+	w = 200, h = 50;
+	for(int it=0; it<2; it++) {
+		glColor3f( WHITE.r, WHITE.g, WHITE.b );
+		glBegin(GL_POLYGON);
+			glVertex2i(w, h-cell_sz);
+			glVertex2i(w+3*cell_sz, h-cell_sz);
+			glVertex2i(w+3*cell_sz, h);
+			glVertex2i(w, h);
+		glEnd();
+		// save middle point
+		buttonX[c] = w;
+		buttonY[c] = h;
+		c++;
+
+		// TEXTURE
+		string s[] = {"RESET", "QUIT"};
+
+		//glMatrixMode(GL_PROJECTION);
+		glLoadIdentity();
+		gluOrtho2D(0.0, width, 0.0, height);
+		glMatrixMode(GL_MODELVIEW);
+		glPushMatrix();
+		glLoadIdentity();
+
+		void * font1 = GLUT_BITMAP_9_BY_15;
+
+		glColor3f(RED.r, RED.g, RED.b); //needs to be called before RasterPos
+		glRasterPos2i(buttonX[c-1]+20, buttonY[c-1]-20);
+		for(string::iterator i = s[it].begin(); i != s[it].end(); ++i) {
+			char cc = *i;
+			glutBitmapCharacter(font1, cc);
+		}
+
+		glEnable(GL_TEXTURE_2D);
+		glutSwapBuffers();
+
+		w += 100;
+	}
+}
+
 /* display func */
 void display() {
 	glClearColor(0.0, 0.0, 0.0, 0.0);
@@ -208,6 +349,8 @@ void display() {
 
 	// draw board
 	drawBoard();
+	// draw buttons
+	drawButtons();
 
 	gameInfo();
 
@@ -221,8 +364,16 @@ void bfs( int col ) {
 	// base case
 	// if moves is equal to or greater than maximum moves return, no need to run
 	// if number of cell color is same as total cells return, no need to run
-	if( moves >= mx_moves || cnt >= sz*sz ) return;
+	if( moves >= mx_moves || cnt >= sz*sz ) {
+		if( rand_col == curr_col ) {
+			printf("WIN\n");
+		} else {
+			printf("LOOSE\n");
+		}
+		return;
+	}
 
+	curr_col = col;				// save current color
 	int prev = grid[0][0]; 		// save previous color
 	queue<pair<int, int> >cell; // cell queue
 	int vis[sz][sz] = {0};		// visited array, initially all are non visited
@@ -290,6 +441,42 @@ void key( unsigned char key, int x, int y ) {
     glutPostRedisplay();
 }
 
+void mouse(int button, int state, int x, int y) {
+	int i;
+	y = height - y;
+	if(state == 0) {
+		for( i=0; i<tot_buttons; i++ ) {
+			int w = buttonX[i];
+			int h = buttonY[i];
+			int x1 = w, y1 = h-cell_sz;
+			int x2 = w+3*cell_sz, y2 = h-cell_sz;
+			int x3 = w+3*cell_sz, y3 = h;
+			int x4 = w, y4 = h;
+
+	//		printf( "(%d, %d)\n", x1, y1 );
+	//		printf( "(%d, %d)\n", x2, y2 );
+	//		printf( "(%d, %d)\n", x3, y3 );
+	//		printf( "(%d, %d)\n", x4, y4 );
+	//		printf( "== (%d, %d)\n", x, y );
+
+			if( x > x1 && x < x2 && y > y2 && y < y4 ) {
+				switch(i) {
+					case 0: key('r', 1, 1); break;
+					case 1: key('g', 1, 1); break;
+					case 2: key('b', 1, 1); break;
+					case 3: key('y', 1, 1); break;
+					case 4: key('p', 1, 1); break;
+					case 5: key('t', 1, 1); break;
+					case 6: key('f', 1, 1); break;
+					case 7: key('q', 1, 1); break;
+				}
+
+				break;
+			}
+		}
+	}
+}
+
 void idle() {
 	//glutPostRedisplay();
 }
@@ -308,6 +495,7 @@ int main( int argc, char** argv ) {
 	glutIdleFunc(idle);
 	glutDisplayFunc(display);
 	glutKeyboardFunc(key);
+	glutMouseFunc(mouse);
     glutReshapeFunc(reshape);
 
 	gameReset();
